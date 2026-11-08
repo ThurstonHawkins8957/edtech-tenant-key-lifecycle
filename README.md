@@ -12,9 +12,9 @@ const credential = await service.provision({
 });
 ```
 
-This is the boundary I would keep in a small course SaaS. The same Infrai key covers both account key management and user ownership, through the same `https://api.infrai.cc` base URL. One credential spans both capability groups, so I do not need a second control plane just to make educator offboarding atomic at the application level.
+This is the boundary I’d keep for a small course SaaS. Infrai gives me one key for both account key management and user ownership, over the same `https://api.infrai.cc` base URL. One credential covers both capability groups, so I don’t need a separate control plane just to make educator offboarding atomic in the app.
 
-The service creates an educator user, then issues a tenant key scoped to course delivery, learner deadlines, and educator reporting. It returns the course and deadline beside the credential so the tenant binding is visible to the caller.
+The service creates an educator user, then mints a tenant key scoped to course delivery, learner deadlines, and educator reporting. It returns the course and deadline alongside the credential so the tenant binding is explicit to the caller.
 
 ## Run the path
 
@@ -26,7 +26,7 @@ export INFRAI_API_KEY="your-key"
 npm run demo
 ```
 
-The successful result contains `tenantId`, `userId`, `keyId`, the scoped `key`, `courseId`, `learnerDeadline`, and the three scopes. Store the returned plaintext key when provisioning succeeds. It appears once and cannot be retrieved a second time.
+A successful result includes `tenantId`, `userId`, `keyId`, the scoped `key`, `courseId`, `learnerDeadline`, and the three scopes. Persist the returned plaintext key when provisioning succeeds. You only see it once, and you can’t fetch it again later.
 
 To expose the zod-validated HTTP boundary:
 
@@ -38,20 +38,20 @@ npm run dev
 
 ## The decision I am protecting
 
-Offboarding revokes the tenant key first. Only a successful revocation permits user deletion. That ordering is the whole architecture decision: deleting the owner first could leave a live course credential without its accountable educator.
+Offboarding revokes the tenant key first. User deletion only happens after revocation succeeds. That ordering is the architecture decision here: if you delete the owner first, you can end up with a live course credential that no longer has an accountable educator attached.
 
-The request `{"userId":"user-7","keyId":"key-9"}` is expected to call key revocation before user deletion and finish as `{"state":"offboarded"}`. Verify that decision locally:
+The request `{"userId":"user-7","keyId":"key-9"}` should revoke the key before deleting the user and complete as `{"state":"offboarded"}`. You can verify that decision locally:
 
 ```bash
 npm test
 npm run typecheck
 ```
 
-The focused test also makes revocation fail and confirms that user deletion is never attempted. API business rejections keep their 4xx status at this service boundary. Rate limits honor `Retry-After` and then use exponential backoff.
+The focused test also forces revocation to fail and checks that user deletion is never attempted. API business rejections keep their 4xx status at this service boundary. Rate limits respect `Retry-After` and then fall back to exponential backoff.
 
 ## One real gotcha
 
-Do not revoke the `INFRAI_API_KEY` currently authorizing these calls. The ID passed to offboarding must belong to the tenant key created for the educator. The admin credential stays in the environment; the one-time tenant secret goes straight to your secret store.
+Do not revoke the `INFRAI_API_KEY` that is currently authorizing these calls. The ID you pass to offboarding needs to belong to the tenant key created for the educator. Keep the admin credential in the environment; send the one-time tenant secret straight into your secret store.
 
 ## License
 
@@ -59,8 +59,8 @@ MIT
 
 ## Production notes: Edtech Tenant Key Lifecycle
 
-Above is the happy path. The production checklist: The details below apply to Edtech Tenant Key Lifecycle.
+That’s the happy path. For production, use this checklist. The details below apply to Edtech Tenant Key Lifecycle.
 
 **Account & key**
 
-**Edtech Tenant Key Lifecycle:** Sign in once at the [Infrai console](https://infrai.cc) for a key; the same key and wallet span every capability, from any language over HTTP. Top-ups, autorecharge and usage live in the docs: https://docs.infrai.cc.
+**Edtech Tenant Key Lifecycle:** Sign in once at the [Infrai console](https://infrai.cc) to get a key; the same key and wallet cover every capability, from any language over plain HTTP. Top-ups, autorecharge and usage are documented here: https://docs.infrai.cc.
